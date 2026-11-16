@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner OCR Studio - Extraction de Texte</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tesseract.js v5 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style personnalisé pour la zone de glisser-déposer */
+        .drop-zone--over {
+            border-color: #6366f1 !important;
+            background-color: rgba(99, 102, 241, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 min-h-full flex flex-col transition-colors duration-200">
+
+    <!-- Header / Navbar -->
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 sticky top-0 z-30 transition-colors duration-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i class="fa-solid font-bold fa-file-contract text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight">OCR Studio</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Convertissez vos images en texte modifiable</p>
+                </div>
+            </div>
+
+            <!-- Controls (Language + Theme) -->
+            <div class="flex items-center space-x-3">
+                <!-- Sélecteur de langue OCR -->
+                <div class="relative">
+                    <select id="languageSelect" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs sm:text-sm rounded-lg px-3 py-2 pr-8 focus:ring-2 focus:ring-brand-500 focus:outline-none transition-colors cursor-pointer">
+                        <option value="fra" selected>🇫🇷 Français</option>
+                        <option value="eng">🇬🇧 Anglais (English)</option>
+                        <option value="spa">🇪🇸 Espagnol (Español)</option>
+                        <option value="deu">🇩🇪 Allemand (Deutsch)</option>
+                        <option value="ita">🇮🇹 Italien (Italiano)</option>
+                        <option value="por">🇵🇹 Portugais (Português)</option>
+                    </select>
+                </div>
+
+                <!-- Theme Toggle Button -->
+                <button id="themeToggle" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Changer de thème">
+                    <i id="themeIcon" class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Col 1: Importation / Prévisualisation / Caméra -->
+        <section class="flex flex-col space-y-4">
+            <div class="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-semibold text-base flex items-center gap-2">
+                        <i class="fa-solid fa-image text-brand-500"></i> Image Source
+                    </h2>
+                    <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">Étape 1</span>
+                </div>
+
+                <!-- Zone Drag and Drop / Preview Container -->
+                <div id="dropZone" class="relative flex-1 min-h-[300px] border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center p-6 text-center cursor-pointer hover:border-brand-500 dark:hover:border-brand-500 transition-all overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
+                    
+                    <!-- Formulaire d'upload masqué -->
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
+
+                    <!-- Vue initiale d'importation -->
+                    <div id="uploadPlaceholder" class="flex flex-col items-center space-y-3">
+                        <div class="w-16 h-16 rounded-full bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-500 flex items-center justify-center text-2xl mb-1">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <p class="font-medium text-slate-700 dark:text-slate-200">
+                            Glissez-déposez une image ici
+                        </p>
+                        <p class="text-xs text-slate-400 max-w-xs">
+                            Format supportés : PNG, JPG, JPEG, WEBP, BMP. Traitement local et sécurisé.
+                        </p>
+                        <div class="flex items-center gap-3 pt-2">
+                            <button type="button" onclick="document.getElementById('fileInput').click()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">
+                                Parcourir les fichiers
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Prévisualisation de l'image -->
+                    <div id="previewContainer" class="hidden absolute inset-0 w-full h-full p-2 flex items-center justify-center bg-slate-950/5 dark:bg-slate-950/40 backdrop-blur-xs">
+                        <img id="imagePreview" src="" alt="Prévisualisation" class="max-h-full max-w-full object-contain rounded-lg shadow-md">
+                    </div>
+                </div>
+
+                <!-- Action Toolbar sous l'image -->
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button type="button" onclick="document.getElementById('fileInput').click()" class="flex-1 min-w-[120px] px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-folder-open"></i> Importer
+                    </button>
+                    <button type="button" id="openCameraBtn" class="flex-1 min-w-[120px] px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-camera"></i> Prendre photo
+                    </button>
+                    <button type="button" id="startOcrBtn" disabled class="px-5 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:cursor-not-allowed text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-bolt"></i> Lancer l'OCR
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Col 2: Zone de Résultat / Éditeur de texte -->
+        <section class="flex flex-col space-y-4">
+            <div class="bg-white dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-semibold text-base flex items-center gap-2">
+                        <i class="fa-solid fa-file-lines text-brand-500"></i> Texte Reconnu
+                    </h2>
+                    <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">Étape 2</span>
+                </div>
+
+                <!-- Zone d'état / Barre de progression -->
+                <div id="progressContainer" class="hidden mb-4 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+                    <div class="flex justify-between text-xs font-medium">
+                        <span id="statusMessage" class="text-slate-600 dark:text-slate-300">Initialisation du moteur OCR...</span>
+                        <span id="statusPercent" class="text-brand-600 dark:text-brand-500">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="progressBar" class="bg-brand-600 h-full w-0 transition-all duration-200"></div>
+                    </div>
+                </div>
+
+                <!-- Textarea éditable pour le texte extrait -->
+                <div class="flex-1 flex flex-col min-h-[300px]">
+                    <textarea id="ocrOutput" placeholder="Le texte extrait de votre document s'affichera ici. Vous pourrez le modifier librement..." class="w-full flex-1 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-800 dark:text-slate-100 font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors resize-none"></textarea>
+                </div>
+
+                <!-- Actions de résultat -->
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button type="button" id="copyBtn" class="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-regular fa-copy"></i> Copier
+                    </button>
+                    <button type="button" id="downloadBtn" class="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-download"></i> Télécharger .txt
+                    </button>
+                    <button type="button" id="clearBtn" class="px-4 py-2 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-trash-can"></i> Effacer
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Caméra -->
+    <div id="cameraModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-camera text-brand-500"></i> Prendre une photo
+                </h3>
+                <button type="button" id="closeCameraBtn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold p-1">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Conteneur Flux Caméra -->
+            <div class="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center">
+                <video id="webcamVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                <canvas id="captureCanvas" class="hidden"></canvas>
+            </div>
+
+            <!-- Commandes Modal Caméra -->
+            <div class="flex justify-between items-center pt-2">
+                <button type="button" id="switchCameraBtn" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-rotate"></i> Inverser caméra
+                </button>
+                <button type="button" id="captureBtn" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg text-sm transition-colors flex items-center gap-2 shadow-md">
+                    <i class="fa-solid fa-circle-dot"></i> Capturer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-3 rounded-xl shadow-xl flex items-center space-x-3 text-sm font-medium">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 dark:text-emerald-600 text-lg"></i>
+        <span id="toastMessage">Texte copié dans le presse-papier !</span>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // Store Application State
+        const state = {
+            imageSrc: null,
+            isProcessing: false,
+            mediaStream: null,
+            facingMode: 'user' // 'user' ou 'environment'
+        };
+
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const startOcrBtn = document.getElementById('startOcrBtn');
+        const ocrOutput = document.getElementById('ocrOutput');
+        const languageSelect = document.getElementById('languageSelect');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusPercent = document.getElementById('statusPercent');
+        
+        // Buttons
+        const copyBtn = document.getElementById('copyBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        
+        // Camera elements
+        const openCameraBtn = document.getElementById('openCameraBtn');
+        const cameraModal = document.getElementById('cameraModal');
+        const closeCameraBtn = document.getElementById('closeCameraBtn');
+        const webcamVideo = document.getElementById('webcamVideo');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const captureBtn = document.getElementById('captureBtn');
+        const switchCameraBtn = document.getElementById('switchCameraBtn');
+
+        // Theme Toggle Elements
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+
+        // Initialisation Theme
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+                document.documentElement.classList.add('dark');
+                themeIcon.className = 'fa-solid fa-sun';
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeIcon.className = 'fa-solid fa-moon';
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            themeIcon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        });
+
+        initTheme();
+
+        // Afficher Toast Notification
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.textContent = message;
+            if (isError) {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-rose-500 text-lg';
+            } else {
+                toastIcon.className = 'fa-solid fa-circle-check text-emerald-400 dark:text-emerald-600 text-lg';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Charger et afficher une image
+        function loadImage(fileOrUrl) {
+            if (!fileOrUrl) return;
+
+            const reader = new FileReader();
+            if (fileOrUrl instanceof Blob || fileOrUrl instanceof File) {
+                reader.readAsDataURL(fileOrUrl);
+                reader.onload = (e) => {
+                    setPreviewImage(e.target.result);
+                };
+            } else if (typeof fileOrUrl === 'string') {
+                setPreviewImage(fileOrUrl);
+            }
+        }
+
+        function setPreviewImage(src) {
+            state.imageSrc = src;
+            imagePreview.src = src;
+            uploadPlaceholder.classList.add('hidden');
+            previewContainer.classList.remove('hidden');
+            startOcrBtn.disabled = false;
+        }
+
+        // Event Listeners Drag & Drop
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drop-zone--over');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drop-zone--over');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                loadImage(files[0]);
+            } else {
+                showToast('Veuillez déposer un fichier image valide.', true);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                loadImage(e.target.files[0]);
+            }
+        });
+
+        // OCR Execution avec Tesseract.js
+        startOcrBtn.addEventListener('click', async () => {
+            if (!state.imageSrc) {
+                showToast('Aucune image sélectionnée.', true);
+                return;
+            }
+
+            state.isProcessing = true;
+            startOcrBtn.disabled = true;
+            progressContainer.classList.remove('hidden');
+            statusMessage.textContent = 'Initialisation...';
+            progressBar.style.width = '0%';
+            statusPercent.textContent = '0%';
+
+            const lang = languageSelect.value;
+
+            try {
+                // Utilisation de la nouvelle API Tesseract.js v5
+                const worker = await Tesseract.createWorker(lang, 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = Math.round(m.progress * 100);
+                            progressBar.style.width = `${pct}%`;
+                            statusPercent.textContent = `${pct}%`;
+                            statusMessage.textContent = 'Reconnaissance du texte en cours...';
+                        } else if (m.status) {
+                            statusMessage.textContent = m.status;
+                        }
+                    }
+                });
+
+                const ret = await worker.recognize(state.imageSrc);
+                ocrOutput.value = ret.data.text;
+                await worker.terminate();
+
+                showToast('OCR terminé avec succès !');
+            } catch (err) {
+                console.error('Erreur OCR:', err);
+                showToast('Une erreur est survenue lors du traitement OCR.', true);
+                statusMessage.textContent = 'Échec de l\'analyse.';
+            } finally {
+                state.isProcessing = false;
+                startOcrBtn.disabled = false;
+            }
+        });
+
+        // Gestion de la Caméra Live
+        async function startCamera() {
+            try {
+                if (state.mediaStream) {
+                    stopCamera();
+                }
+
+                const constraints = {
+                    video: {
+                        facingMode: state.facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                state.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                webcamVideo.srcObject = state.mediaStream;
+                cameraModal.classList.remove('hidden');
+            } catch (err) {
+                console.error('Erreur accès caméra:', err);
+                showToast('Impossible d\'accéder à la caméra. Vérifiez les autorisations.', true);
+            }
+        }
+
+        function stopCamera() {
+            if (state.mediaStream) {
+                state.mediaStream.getTracks().forEach(track => track.stop());
+                state.mediaStream = null;
+            }
+            cameraModal.classList.add('hidden');
+        }
+
+        openCameraBtn.addEventListener('click', startCamera);
+        closeCameraBtn.addEventListener('click', stopCamera);
+
+        switchCameraBtn.addEventListener('click', () => {
+            state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+            startCamera();
+        });
+
+        captureBtn.addEventListener('click', () => {
+            if (!webcamVideo.srcObject) return;
+
+            const context = captureCanvas.getContext('2d');
+            captureCanvas.width = webcamVideo.videoWidth;
+            captureCanvas.height = webcamVideo.videoHeight;
+            context.drawImage(webcamVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+
+            const imageDataUrl = captureCanvas.toDataURL('image/png');
+            loadImage(imageDataUrl);
+            stopCamera();
+            showToast('Photo capturée avec succès !');
+        });
+
+        // Copier dans le presse-papier
+        copyBtn.addEventListener('click', () => {
+            const text = ocrOutput.value;
+            if (!text.trim()) {
+                showToast('Aucun texte à copier.', true);
+                return;
+            }
+
+            // Fallback compatible iFrame/Navigateurs
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('Texte copié dans le presse-papier !');
+                }).catch(() => {
+                    copyUsingTextArea(text);
+                });
+            } else {
+                copyUsingTextArea(text);
+            }
+        });
+
+        function copyUsingTextArea(text) {
+            ocrOutput.select();
+            document.execCommand('copy');
+            showToast('Texte copié !');
+        }
+
+        // Télécharger au format .txt
+        downloadBtn.addEventListener('click', () => {
+            const text = ocrOutput.value;
+            if (!text.trim()) {
+                showToast('Aucun texte à télécharger.', true);
+                return;
+            }
+
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ocr-export-${new Date().toISOString().slice(0, 10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('Téléchargement démarré.');
+        });
+
+        // Effacer tout
+        clearBtn.addEventListener('click', () => {
+            state.imageSrc = null;
+            imagePreview.src = '';
+            fileInput.value = '';
+            ocrOutput.value = '';
+            uploadPlaceholder.classList.remove('hidden');
+            previewContainer.classList.add('hidden');
+            progressContainer.classList.add('hidden');
+            startOcrBtn.disabled = true;
+            showToast('Toutes les données ont été réinitialisées.');
+        });
+    </script>
+</body>
+</html>
